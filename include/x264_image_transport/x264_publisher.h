@@ -29,7 +29,7 @@ namespace x264_image_transport {
 
 	  x264Publisher();
 	
-	  ~x264Publisher();
+	  ~x264Publisher() override;
 	  
 	  // Return the system unique string representing the theora transport type
 	  virtual std::string getTransportName() const { return "x264"; }
@@ -49,7 +49,6 @@ namespace x264_image_transport {
 	  virtual void publish(const sensor_msgs::Image& message,
 	                       const PublishFn& publish_fn) const;
 
-
       void memory_cleanup() const;
 	
 	  // Dynamic reconfigure support
@@ -61,28 +60,20 @@ namespace x264_image_transport {
 #endif	
 	
       void initialize_codec(int width,int height,int fps, const std::string &encoding) const;
-	
-	  // Some data is preserved across calls to publish(), but from the user's perspective publish() is
-	  // "logically const"
-	  mutable std::vector<x264_image_transport::x264Packet> stream_header_;
 	   
       /** ENCODER VAR **/
-      mutable AVFormatContext *encFmtCtx_;
-      mutable AVCodecContext  *encCdcCtx_;
-      mutable AVFrame *encFrame_;
-      mutable AVPacket encodedPacket_;
-
-      /** temporary memory **/
-      mutable unsigned char *buffer_;
+      mutable AVCodecContext  *enc_context_;
+      mutable AVFrame *enc_frame_;
+      mutable AVPacket enc_packet_;
 
       /** SOFTWARE SCALE CONTEXT **/
-      mutable SwsContext *sws_ctx_;
+      mutable SwsContext *sws_context_;
 
 	  //initialized flag
 	  mutable bool initialized_;
 
       //Maximum quantization
-      int qmax_;
+      int quantization_max_;
 	  
       //Config protect
       mutable pthread_mutex_t mutex_;

@@ -1,23 +1,21 @@
-#include "x264_image_transport/x264_publisher.h"
 #include <sensor_msgs/image_encodings.h>
 #include <vector>
 #include <cstdio> //for memcpy
+#include "x264_image_transport/x264_publisher.h"
 
 namespace x264_image_transport {
 
 	namespace enc = sensor_msgs::image_encodings;
 
 	x264Publisher::x264Publisher()
-	: encFmtCtx_(NULL),
-	  encCdcCtx_(NULL),
-	  encFrame_(NULL),
-      buffer_(NULL),
-	  sws_ctx_(NULL),
-	  initialized_(false),
-      qmax_(51)
+            :enc_context_(nullptr),
+             enc_frame_(nullptr),
+             sws_context_(nullptr),
+             initialized_(false),
+             quantization_max_(51)
 	{
 		
-        pthread_mutex_init(&mutex_,NULL);	
+        pthread_mutex_init(&mutex_, nullptr);
 	}
 	
 	x264Publisher::~x264Publisher()
@@ -63,7 +61,7 @@ namespace x264_image_transport {
 		//HANDLE CONFIGURATION...
 		ROS_WARN("Configuration changed qmax: %i",config.qmax);
 
-        qmax_ = config.qmax;
+        quantization_max_ = config.qmax;
 
         //reinitialize codec
         if (initialized_)
@@ -74,7 +72,6 @@ namespace x264_image_transport {
             //Cleanup memory            
             memory_cleanup();
 
-
             pthread_mutex_unlock (&mutex_);
         }
         
@@ -84,32 +81,21 @@ namespace x264_image_transport {
     void x264Publisher::memory_cleanup() const
     {
         //Cleanup memory            
-        if(encCdcCtx_)
+        if(enc_context_)
         {
-            avcodec_close(encCdcCtx_);
-            encCdcCtx_ = 0;
+            avcodec_close(enc_context_);
+            enc_context_ = nullptr;
         }
-        if(encFmtCtx_)
+        if(enc_frame_)
         {
-            avformat_close_input(&encFmtCtx_);
-            encFmtCtx_ = 0;
-        }
-        if(encFrame_)
-        {
-            av_free(encFrame_);
-            encFrame_ = 0;
+            av_free(enc_frame_);
+            enc_frame_ = nullptr;
         }
 
-        if(sws_ctx_)
+        if(sws_context_)
         {
-            sws_freeContext(sws_ctx_);
-            sws_ctx_ = 0;
-        }
-
-        if (buffer_)
-        {
-            delete [] buffer_;
-            buffer_ = NULL;
+            sws_freeContext(sws_context_);
+            sws_context_ = nullptr;
         }
 
         initialized_ = false;
@@ -121,13 +107,9 @@ namespace x264_image_transport {
 	
 	    // must be called before using avcodec lib
         avcodec_register_all();
-        //Register codecs, devices and formats
-        av_register_all();
-        //Initialize network, this is new from april 2013, it will initialize the RTP
-        avformat_network_init();
 	
 	    //Codec
-	    AVCodec *codec = 0;
+	    AVCodec *codec = nullptr;
 	    
 	    codec = avcodec_find_encoder(CODEC_ID_H264);	    
 	    if (!codec)
@@ -140,8 +122,8 @@ namespace x264_image_transport {
 	    }
 	    
 	    //Context
-	    encCdcCtx_ = avcodec_alloc_context3(codec);
-        if (!encCdcCtx_)
+	    enc_context_ = avcodec_alloc_context3(codec);
+        if (!enc_context_)
         {
            ROS_ERROR("Unable to allocate encoder context");
            //Cleanup memory            
@@ -149,35 +131,34 @@ namespace x264_image_transport {
            pthread_mutex_unlock (&mutex_);
            return;
         }
-	    
-	    
+
 	    //Setup some parameter
         /* put sample parameters */
-        encCdcCtx_->bit_rate = 512000; //Seems a good starting point
-        encCdcCtx_->qmax = qmax_; //Allow big degradation
+        enc_context_->bit_rate = 512000; //Seems a good starting point
+        enc_context_->qmax = quantization_max_; //Allow big degradation
         /* resolution must be a multiple of two */
-        encCdcCtx_->width = width;
-        encCdcCtx_->height = height;
+        enc_context_->width = width;
+        enc_context_->height = height;
         /* frames per second */
         //WARNING FPS = 1/TIME_BASE---------------------
         AVRational fr;
         fr.num = fps;
         fr.den = 1;
-        encCdcCtx_->time_base.num = fr.den;
-        encCdcCtx_->time_base.den = fr.num;
+        enc_context_->time_base.num = fr.den;
+        enc_context_->time_base.den = fr.num;
         
         //Theory : High gop_size (more b-frame and p-frame) = High CPU, Low Bandwidth
         //       : Low gop_size (more intra-frame)  = Low CPU, High Bandwidth
-        encCdcCtx_->gop_size = (fr.num/fr.den)/2; /* emit one group of picture (which has an intra frame) every  frameRate/2 */
-        encCdcCtx_->max_b_frames=2;
-        encCdcCtx_->pix_fmt = PIX_FMT_YUV420P;
+        enc_context_->gop_size = (fr.num/fr.den)/2; /* emit one group of picture (which has an intra frame) every  frameRate/2 */
+        enc_context_->max_b_frames=2;
+        enc_context_->pix_fmt = PIX_FMT_YUV420P;
         
-        av_opt_set(encCdcCtx_->priv_data, "profile", "main", AV_OPT_SEARCH_CHILDREN);
-        av_opt_set(encCdcCtx_->priv_data, "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
-        av_opt_set(encCdcCtx_->priv_data, "preset", "ultrafast", AV_OPT_SEARCH_CHILDREN);
+        av_opt_set(enc_context_->priv_data, "profile", "main", AV_OPT_SEARCH_CHILDREN);
+        av_opt_set(enc_context_->priv_data, "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
+        av_opt_set(enc_context_->priv_data, "preset", "ultrafast", AV_OPT_SEARCH_CHILDREN);
         
 	    /* open the encoder codec */
-        if (avcodec_open2(encCdcCtx_, codec, NULL) < 0)
+        if (avcodec_open2(enc_context_, codec, nullptr) < 0)
         {
             ROS_ERROR("Could not open the encoder");
             //Cleanup memory            
@@ -187,9 +168,9 @@ namespace x264_image_transport {
         }
 
         /** allocate and AVFRame for encoder **/
-        encFrame_ = av_frame_alloc();
+        enc_frame_ = av_frame_alloc();
 
-        if (!encFrame_)
+        if (!enc_frame_)
         {
             ROS_ERROR("Cannot allocate frame");
             //Cleanup memory            
@@ -202,34 +183,34 @@ namespace x264_image_transport {
         // Will convert from RGB24 to YUV420P
         if (encoding == enc::BGR8)
         {        
-            sws_ctx_ = sws_getContext(width, height, PIX_FMT_BGR24, //src
-                                    encCdcCtx_->width, encCdcCtx_->height, encCdcCtx_->pix_fmt, //dest
-                                    SWS_FAST_BILINEAR, NULL, NULL, NULL);
+            sws_context_ = sws_getContext(width, height, PIX_FMT_BGR24, //src
+                                    enc_context_->width, enc_context_->height, enc_context_->pix_fmt, //dest
+                                    SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
         }
         else if (encoding == enc::RGB8)
         {
-            sws_ctx_ = sws_getContext(width, height, PIX_FMT_RGB24, //src
-                                    encCdcCtx_->width, encCdcCtx_->height, encCdcCtx_->pix_fmt, //dest
-                                    SWS_FAST_BILINEAR, NULL, NULL, NULL);
+            sws_context_ = sws_getContext(width, height, PIX_FMT_RGB24, //src
+                                    enc_context_->width, enc_context_->height, enc_context_->pix_fmt, //dest
+                                    SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
         }
         else if (encoding == enc::RGB16)
         {
-            sws_ctx_ = sws_getContext(width, height, PIX_FMT_RGB48, //src
-                                    encCdcCtx_->width, encCdcCtx_->height, encCdcCtx_->pix_fmt, //dest
-                                    SWS_FAST_BILINEAR, NULL, NULL, NULL);
+            sws_context_ = sws_getContext(width, height, PIX_FMT_RGB48, //src
+                                    enc_context_->width, enc_context_->height, enc_context_->pix_fmt, //dest
+                                    SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
         }
         else if (encoding == enc::YUV422)
         {
-            sws_ctx_ = sws_getContext(width, height, PIX_FMT_UYVY422, //src
-                                    encCdcCtx_->width, encCdcCtx_->height, encCdcCtx_->pix_fmt, //dest
-                                    SWS_FAST_BILINEAR, NULL, NULL, NULL);
+            sws_context_ = sws_getContext(width, height, PIX_FMT_UYVY422, //src
+                                    enc_context_->width, enc_context_->height, enc_context_->pix_fmt, //dest
+                                    SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
         }
         else if (encoding == enc::BAYER_GBRG16)
         {
             /*
-            sws_ctx_ = sws_getContext(width, height, PIX_FMT_BAYER_GBRG16LE, //src
+            sws_context_ = sws_getContext(width, height, PIX_FMT_BAYER_GBRG16LE, //src
                                     encCdcCtx_->width, encCdcCtx_->height, encCdcCtx_->pix_fmt, //dest
-                                    SWS_FAST_BILINEAR, NULL, NULL, NULL);
+                                    SWS_FAST_BILINEAR, nullptr, nullptr, NULL);
             */
             ROS_WARN_THROTTLE(1.0,"Encoding will be supported in next ffmpeg version : %s",encoding.c_str());
             //Cleanup memory            
@@ -246,17 +227,14 @@ namespace x264_image_transport {
             pthread_mutex_unlock (&mutex_);
             return;
         }
-        //Allocate  buffer
-        buffer_ = new unsigned char[width * height * 2];
-
 
         //Allocate picture region
-        avpicture_alloc((AVPicture *)encFrame_, encCdcCtx_->pix_fmt, width, height);
+        avpicture_alloc((AVPicture *)enc_frame_, enc_context_->pix_fmt, width, height);
 
         //Initialize packet
-        av_init_packet(&encodedPacket_);
-        encodedPacket_.data = NULL;    // packet data will be allocated by the encoder
-        encodedPacket_.size = 0;
+        av_init_packet(&enc_packet_);
+        enc_packet_.data = nullptr;    // packet data will be allocated by the encoder
+        enc_packet_.size = 0;
 			
 		initialized_ = true;
 		ROS_INFO("x264Publisher::initialize_codec(): codec initialized (width: %i, height: %i, fps: %i)",width,height,fps);
@@ -282,59 +260,57 @@ namespace x264_image_transport {
 		
 		if (!initialized_)
 		{
-		      initialize_codec(width,height,fps, message.encoding);  
+            initialize_codec(width,height,fps, message.encoding);
 		}
 
         //Something went wrong
-        if (!initialized_)
-            return;
+        if (!initialized_) {return;}
 
         pthread_mutex_lock (&mutex_);
 
-
-
         //Pointer to RGB DATA    
         unsigned char* ptr[1];		
-		ptr[0] = (unsigned char*) &message.data[0];
+		ptr[0] = (unsigned char*)&message.data[0];
         //ROS_INFO("Input data size %i ",message.data.size());          
         //Let's convert the image to something ffmpeg/x264 understands		
    		//Get scaling context...
  
-        sws_scale(sws_ctx_,ptr,&srcstride,0,height,encFrame_->data, encFrame_->linesize);
+        sws_scale(sws_context_,ptr,&srcstride,0,height,enc_frame_->data, enc_frame_->linesize);
 
 
         //int got_output = 0;
         int ret = 0;
-        //uint8_t buffer[height * srcstride]; //one full frame
-        
+        int got_packet = 0;
 
-        //ret = avcodec_encode_video2(encCdcCtx_, &encodedPacket_, encFrame_, &got_output);
-        ret = avcodec_encode_video(encCdcCtx_, buffer_, height * srcstride, encFrame_);
- 
-        if (ret > 0)
-        {
-                // OK, Let's send our packets...
-		    	x264_image_transport::x264Packet packet;
-		    	
-		    	//Set data
-		    	packet.data.resize(ret);
-		    	
-		    	//Set width & height
-		    	packet.img_width = width; 
-		    	packet.img_height = height;
-		    	
-		    	//copy NAL data
-		    	memcpy(&packet.data[0],buffer_,ret);
-		    	
-                //Affect header
-                packet.header = message.header;
+        ret = avcodec_encode_video2(enc_context_, &enc_packet_, enc_frame_, &got_packet);
+        if (ret) {
+            ROS_ERROR("Error encoding image");
+            return;
+        }
 
-		    	//publish
-		    	publish_fn(packet);
-		    	
-		    	//Not yet used...
-		    	av_free_packet(&encodedPacket_);
-                av_init_packet(&encodedPacket_);        
+        if (got_packet) {
+            // OK, Let's send our packets...
+            x264_image_transport::x264Packet packet;
+
+            //Set data
+            packet.data.resize(static_cast<size_t >(enc_packet_.size));
+
+            //Set width & height
+            packet.img_width = width;
+            packet.img_height = height;
+
+            //copy NAL data
+            memcpy(&packet.data[0], enc_packet_.data, static_cast<size_t >(enc_packet_.size));
+
+            //Affect header
+            packet.header = message.header;
+
+            //publish
+            publish_fn(packet);
+
+            //Not yet used...
+            av_free_packet(&enc_packet_);
+            av_init_packet(&enc_packet_);
         }
 
         pthread_mutex_unlock (&mutex_);		

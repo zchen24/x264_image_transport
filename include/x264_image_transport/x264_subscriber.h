@@ -51,11 +51,11 @@ namespace x264_image_transport {
 
 
         AVCodecContext  *m_pCodecCtx;
-        AVCodec         *m_pCodec;
-        AVFrame         *m_pFrame;
-        AVFrame         *m_pFrameRGB;
-        SwsContext      *m_img_convert_ctx;
-        uint8_t         *m_buffer;
+        AVCodec         *codec_;
+        AVFrame         *av_frame_;
+        AVFrame         *av_frame_RGB_;
+        SwsContext      *sws_context_;
+        uint8_t         *buffer_;
 	};
 
 } //namespace x264_image_transport
