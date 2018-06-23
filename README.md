@@ -6,6 +6,12 @@ Forked from introlab/introlab-ros-pkg.
 * Removed unused variables 
 * Updated deprecated av lib calls 
 
+# Install Dependencies
+
+```sh
+sudo apt install libx264-dev
+```
+
 
 
 
