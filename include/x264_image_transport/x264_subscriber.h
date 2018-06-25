@@ -1,11 +1,9 @@
 #include <image_transport/simple_subscriber_plugin.h>
 #include <x264_image_transport/x264Packet.h>
 
-#ifndef __APPLE__
 //Dynamic reconfigure not yet working on iOS
 #include <x264_image_transport/x264SubscriberConfig.h>
 #include <dynamic_reconfigure/server.h>
-#endif
 
 extern "C"
 {
@@ -36,12 +34,10 @@ namespace x264_image_transport {
 
 
 		// Dynamic reconfigure support
-#ifndef __APPLE__
 		typedef x264_image_transport::x264SubscriberConfig Config;
 		typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
 		boost::shared_ptr<ReconfigureServer> reconfigure_server_;
 		void configCb(Config& config, uint32_t level);
-#endif
 
 		void initialize_codec(int width, int height);
 		void convert_rgb(AVCodecContext *codec, AVFrame *inFrame, AVFrame *outFrame);
@@ -50,12 +46,11 @@ namespace x264_image_transport {
 		bool initialized_;
 
 
-		AVCodecContext  *m_pCodecCtx;
+		AVCodecContext  *codec_ctx_;
 		AVCodec         *codec_;
 		AVFrame         *av_frame_;
 		AVFrame         *av_frame_RGB_;
 		SwsContext      *sws_context_;
-		uint8_t         *buffer_;
 	};
 
 } //namespace x264_image_transport
