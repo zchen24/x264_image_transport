@@ -2,11 +2,9 @@
 #include <x264_image_transport/x264Packet.h>
 #include <pthread.h>
 
-#ifndef __APPLE__
 //Dynamic reconfigure not yet working on iOS
 #include <x264_image_transport/x264PublisherConfig.h>
 #include <dynamic_reconfigure/server.h>
-#endif
 
 // ffmpeg is C library
 extern "C" {
@@ -45,15 +43,13 @@ namespace x264_image_transport {
 
         // Main publish function
         void publish(const sensor_msgs::Image& message,
-                             const PublishFn& publish_fn) const override;
+                     const PublishFn& publish_fn) const override;
 
         // Dynamic reconfigure support
-#ifndef __APPLE__
         typedef x264_image_transport::x264PublisherConfig Config;
         typedef dynamic_reconfigure::Server<Config> ReconfigureServer;
         boost::shared_ptr<ReconfigureServer> reconfigure_server_;
         void configCb(Config& config, uint32_t level);
-#endif
 
     private:
         void initialize_codec(int width,int height,int fps, const std::string &encoding) const;
@@ -71,7 +67,7 @@ namespace x264_image_transport {
         mutable bool initialized_;
 
         //Maximum quantization
-        int quantization_max_;
+        int qmax_;
 
         //Config protect
         mutable pthread_mutex_t mutex_;

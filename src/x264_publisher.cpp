@@ -12,7 +12,7 @@ namespace x264_image_transport {
              enc_frame_(nullptr),
              sws_context_(nullptr),
              initialized_(false),
-             quantization_max_(51)
+             qmax_(51)
     {
         pthread_mutex_init(&mutex_, nullptr);
     }
@@ -47,20 +47,17 @@ namespace x264_image_transport {
         Base::advertiseImpl(nh, base_topic, queue_size, user_connect_cb, user_disconnect_cb, tracked_object, latch);
 
         // Set up reconfigure server for this topic
-#ifndef __APPLE__
         reconfigure_server_ = boost::make_shared<ReconfigureServer>(this->nh());
         ReconfigureServer::CallbackType f = boost::bind(&x264Publisher::configCb, this, _1, _2);
         reconfigure_server_->setCallback(f);
-#endif
     }
 
-#ifndef __APPLE__
     void x264Publisher::configCb(Config& config, uint32_t level)
     {
         //HANDLE CONFIGURATION...
         ROS_WARN("Configuration changed qmax: %i",config.qmax);
 
-        quantization_max_ = config.qmax;
+        qmax_ = config.qmax;
 
         //reinitialize codec
         if (initialized_)
@@ -75,7 +72,6 @@ namespace x264_image_transport {
         }
 
     }
-#endif
 
     void x264Publisher::memory_cleanup() const
     {
@@ -134,7 +130,7 @@ namespace x264_image_transport {
         //Setup some parameter
         /* put sample parameters */
         enc_context_->bit_rate = 512000; //Seems a good starting point
-        enc_context_->qmax = quantization_max_; //Allow big degradation
+        enc_context_->qmax = qmax_; //Allow big degradation
         /* resolution must be a multiple of two */
         enc_context_->width = width;
         enc_context_->height = height;
